@@ -1,5 +1,5 @@
 import { Product } from "@/types";
-import { getOrCreateWallet } from "@/lib/wallet";
+import { getOrCreateWallet, fundWallet, submitAndApproveTransaction } from "@/lib/wallet";
 
 const CROSSMINT_BASE = process.env.CROSSMINT_ENVIRONMENT === "staging"
   ? "https://staging.crossmint.com/api"
@@ -18,6 +18,12 @@ export async function createOrder(
 ): Promise<{ orderId: string; status: string; quote?: unknown }> {
   const walletAddress = await getOrCreateWallet(userPhone);
 
+  // Auto-fund wallet on staging for demo
+  if (process.env.CROSSMINT_ENVIRONMENT === "staging") {
+    await fundWallet(walletAddress, 100).catch(() => {});
+  }
+
+  // 1. Create order to get quote
   const res = await fetch(`${CROSSMINT_BASE}/2022-06-09/orders`, {
     method: "POST",
     headers: getHeaders(),
@@ -53,9 +59,43 @@ export async function createOrder(
 
   const data = await res.json();
   const order = data.order || data;
+  const orderId = order.orderId;
+  const quoteStatus = order.quote?.status;
+
+  if (quoteStatus !== "valid") {
+    return {
+      orderId,
+      status: "quote-invalid",
+      quote: order.quote,
+    };
+  }
+
+  // 2. Get payment preparation (serialized transaction)
+  const orderDetails = await fetch(`${CROSSMINT_BASE}/2022-06-09/orders/${orderId}`, {
+    headers: getHeaders(),
+  }).then((r) => r.json());
+
+  const prep = orderDetails.payment?.preparation;
+  if (!prep?.serializedTransaction) {
+    return { orderId, status: "no-payment-prep", quote: order.quote };
+  }
+
+  // 3. Extract the ERC20 transfer call from serialized tx
+  const serialized = prep.serializedTransaction;
+  const transferIdx = serialized.indexOf("a9059cbb");
+  if (transferIdx === -1) {
+    throw new Error("Could not parse payment transaction");
+  }
+
+  const tokenContract = "0x14196f08a4fa0b66b7331bc40dd6bcd8a1deea9f"; // USDXM on base-sepolia
+  const callData = "0x" + serialized.slice(transferIdx);
+
+  // 4. Submit and auto-approve the payment transaction
+  const txResult = await submitAndApproveTransaction(walletAddress, tokenContract, callData);
+
   return {
-    orderId: order.orderId || data.orderId || data.id,
-    status: order.phase || order.status || "unknown",
+    orderId,
+    status: txResult.status === "success" ? "paid" : "payment-pending",
     quote: order.quote,
   };
 }
@@ -67,5 +107,5 @@ export async function checkOrderStatus(orderId: string): Promise<string> {
 
   if (!res.ok) return "unknown";
   const data = await res.json();
-  return data.status;
+  return data.phase || data.status;
 }
