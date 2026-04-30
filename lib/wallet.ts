@@ -42,7 +42,23 @@ export async function getOrCreateWallet(userPhone: string): Promise<string> {
   }
 
   const phoneClean = userPhone.replace(/[^0-9]/g, "");
+  const linkedUser = `userId:agent-${phoneClean}`;
 
+  // Try to get existing wallet first
+  const locator = encodeURIComponent(`${linkedUser}:evm:smart-wallet`);
+  const getRes = await fetch(`${CROSSMINT_BASE}/2025-06-09/wallets/${locator}`, {
+    headers: getHeaders(),
+  });
+
+  if (getRes.ok) {
+    const data = await getRes.json();
+    if (data.address) {
+      walletCache.set(userPhone, data.address);
+      return data.address;
+    }
+  }
+
+  // Create new wallet if none exists
   const res = await fetch(`${CROSSMINT_BASE}/2025-06-09/wallets`, {
     method: "POST",
     headers: getHeaders(),
@@ -55,7 +71,7 @@ export async function getOrCreateWallet(userPhone: string): Promise<string> {
           address: signerAccount.address,
         },
       },
-      linkedUser: `userId:agent-${phoneClean}`,
+      linkedUser,
     }),
   });
 

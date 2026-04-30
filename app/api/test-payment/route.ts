@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   try {
     // Step 1: Create wallet
     if (["wallet", "fund", "balance", "order", "full"].includes(step)) {
-      const walletAddress = await getOrCreateWallet("test-user-hackathon");
+      // Use pre-funded wallet if set, otherwise create new
+      const walletAddress = process.env.FUNDED_WALLET_ADDRESS || await getOrCreateWallet("whatsapp:+10000000000");
       results.wallet = { address: walletAddress };
       if (step === "wallet") return NextResponse.json(results);
     }
@@ -62,7 +63,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(results);
       }
 
-      const order = await createOrder(testProduct, "test-order-user");
+      const fundedWallet = (results.wallet as { address: string })?.address;
+      const order = await createOrder(testProduct, "test-order-user", fundedWallet);
       recordSpending("test-order-user", testProduct.price);
       results.order = order;
     }

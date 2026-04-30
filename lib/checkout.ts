@@ -16,9 +16,10 @@ function getHeaders() {
 
 export async function createOrder(
   product: Product,
-  userPhone: string
+  userPhone: string,
+  walletOverride?: string
 ): Promise<{ orderId: string; status: string; quote?: unknown; txHash?: string }> {
-  const walletAddress = await getOrCreateWallet(userPhone);
+  const walletAddress = walletOverride || await getOrCreateWallet(userPhone);
 
   // Auto-fund on staging only
   if (isStaging) {
