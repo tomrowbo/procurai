@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { processMessage } from "@/lib/agent";
 import { getSession, updateSession, resetSession } from "@/lib/conversation";
 import { checkTransaction, recordSpending } from "@/lib/trust";
 import { createOrder } from "@/lib/checkout";
+import { sendWhatsApp } from "@/lib/twilio";
 import { Product } from "@/types";
 
 export const maxDuration = 60;
@@ -104,31 +105,48 @@ export async function POST(req: NextRequest) {
       replyText += "\n\nWant to see product images? Reply IMAGES.";
     }
 
-    // Single purchase — wait for it (maxDuration=60s gives us time)
+    // Single purchase — reply fast, process in background with after()
     if (newState.stage === "purchasing" && newState.selectedProduct) {
-      const result = await purchaseProduct(newState.selectedProduct, from);
-      replyText = `Order complete!\n\n${result}\n\nThank you!`;
-      newState = { stage: "done" };
+      const product = newState.selectedProduct;
+      updateSession(from, newState, body, "Processing your order...");
+
+      after(async () => {
+        const result = await purchaseProduct(product, from);
+        const msg = `Order complete!\n\n${result}\n\nThank you!`;
+        await sendWhatsApp(from, msg).catch(console.error);
+        updateSession(from, { stage: "done" }, "", msg);
+      });
+
+      return twimlResponse(`Processing your order for ${product.title}...`);
     }
 
-    // Batch purchase — wait for all
+    // Batch purchase — reply fast, process in background with after()
     if (newState.stage === "batch-purchasing" && newState.selectedProducts?.length) {
-      const results: string[] = [];
-      let totalSpent = 0;
+      const products = newState.selectedProducts;
+      updateSession(from, newState, body, `Processing ${products.length} items...`);
 
-      for (const product of newState.selectedProducts) {
-        const result = await purchaseProduct(product, from);
-        results.push(result);
-        if (result.includes("Paid!")) {
-          totalSpent += product.price;
+      after(async () => {
+        const results: string[] = [];
+        let totalSpent = 0;
+
+        for (const product of products) {
+          const result = await purchaseProduct(product, from);
+          results.push(result);
+          if (result.includes("Paid!")) {
+            totalSpent += product.price;
+          }
         }
-      }
 
-      replyText =
-        `Batch order complete!\n\n` +
-        results.map((r, i) => `${i + 1}. ${r}`).join("\n\n") +
-        `\n\nTotal spent: $${totalSpent.toFixed(2)}`;
-      newState = { stage: "done" };
+        const msg =
+          `Batch order complete!\n\n` +
+          results.map((r, i) => `${i + 1}. ${r}`).join("\n\n") +
+          `\n\nTotal spent: $${totalSpent.toFixed(2)}`;
+
+        await sendWhatsApp(from, msg).catch(console.error);
+        updateSession(from, { stage: "done" }, "", msg);
+      });
+
+      return twimlResponse(`Processing ${products.length} items... I'll message you when done!`);
     }
 
     updateSession(from, newState, body, replyText);
