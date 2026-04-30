@@ -15,7 +15,7 @@ function getHeaders() {
 export async function createOrder(
   product: Product,
   userPhone: string
-): Promise<{ orderId: string; status: string }> {
+): Promise<{ orderId: string; status: string; quote?: unknown }> {
   const walletAddress = await getOrCreateWallet(userPhone);
 
   const res = await fetch(`${CROSSMINT_BASE}/2022-06-09/orders`, {
@@ -36,11 +36,11 @@ export async function createOrder(
         email: process.env.RECIPIENT_EMAIL || "demo@hackathon.com",
         physicalAddress: {
           name: process.env.RECIPIENT_NAME || "Hackathon Demo",
-          line1: process.env.RECIPIENT_ADDRESS_LINE1 || "123 Demo Street",
-          city: process.env.RECIPIENT_ADDRESS_CITY || "London",
-          state: process.env.RECIPIENT_ADDRESS_STATE || "London",
-          postalCode: process.env.RECIPIENT_ADDRESS_ZIP || "EC1A 1BB",
-          country: process.env.RECIPIENT_ADDRESS_COUNTRY || "GB",
+          line1: process.env.RECIPIENT_ADDRESS_LINE1 || "1600 Pennsylvania Avenue NW",
+          city: process.env.RECIPIENT_ADDRESS_CITY || "Washington",
+          state: process.env.RECIPIENT_ADDRESS_STATE || "DC",
+          postalCode: process.env.RECIPIENT_ADDRESS_ZIP || "20500",
+          country: process.env.RECIPIENT_ADDRESS_COUNTRY || "US",
         },
       },
     }),
@@ -52,7 +52,12 @@ export async function createOrder(
   }
 
   const data = await res.json();
-  return { orderId: data.orderId || data.id, status: data.status };
+  const order = data.order || data;
+  return {
+    orderId: order.orderId || data.orderId || data.id,
+    status: order.phase || order.status || "unknown",
+    quote: order.quote,
+  };
 }
 
 export async function checkOrderStatus(orderId: string): Promise<string> {

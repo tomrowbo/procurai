@@ -1,4 +1,4 @@
-// Per-user wallet creation via Crossmint API
+// Per-user wallet creation via Crossmint API (v2025)
 const CROSSMINT_BASE = process.env.CROSSMINT_ENVIRONMENT === "staging"
   ? "https://staging.crossmint.com/api"
   : "https://www.crossmint.com/api";
@@ -18,17 +18,20 @@ export async function getOrCreateWallet(userPhone: string): Promise<string> {
     return walletCache.get(userPhone)!;
   }
 
-  const userId = userPhone.replace(/[^a-zA-Z0-9]/g, "");
+  // Derive a stable email from phone number for wallet ownership
+  const phoneClean = userPhone.replace(/[^0-9]/g, "");
+  const email = `user-${phoneClean}@procurai.app`;
 
-  const res = await fetch(`${CROSSMINT_BASE}/2022-06-09/wallets`, {
+  const res = await fetch(`${CROSSMINT_BASE}/2025-06-09/wallets`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({
-      type: "evm-smart-wallet",
+      chainType: "evm",
+      type: "smart",
       config: {
-        adminSigner: { type: "evm-fireblocks-custodial" },
+        adminSigner: { type: "email", email },
       },
-      linkedUser: `userId:${userId}`,
+      owner: `email:${email}`,
     }),
   });
 
@@ -45,13 +48,18 @@ export async function getOrCreateWallet(userPhone: string): Promise<string> {
 
 export async function getWalletBalance(address: string): Promise<number> {
   const res = await fetch(
-    `${CROSSMINT_BASE}/v1-alpha2/wallets/${address}/balances?tokens=usdc&chains=base-sepolia`,
+    `${CROSSMINT_BASE}/2025-06-09/wallets/${address}/balances`,
     { headers: getHeaders() }
   );
 
   if (!res.ok) return 0;
 
   const data = await res.json();
-  const usdcBalance = data?.[0]?.balances?.[0]?.amount || "0";
-  return parseFloat(usdcBalance);
+  // Find USDC balance
+  for (const token of data || []) {
+    if (token.token?.toLowerCase() === "usdc") {
+      return parseFloat(token.amount || "0");
+    }
+  }
+  return 0;
 }
