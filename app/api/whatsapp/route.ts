@@ -87,12 +87,7 @@ export async function POST(req: NextRequest) {
     }
 
     updateSession(from, session.state, body, replyText);
-    const twiml = new twilio.twiml.MessagingResponse();
-    const message = twiml.message(replyText);
-    mediaUrls.forEach((url) => message.media(url));
-    return new NextResponse(twiml.toString(), {
-      headers: { "Content-Type": "text/xml" },
-    });
+    return twimlResponse(replyText, mediaUrls);
   }
 
   try {
