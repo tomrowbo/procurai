@@ -65,46 +65,6 @@ See `PROJECT_STRUCTURE.md` for the detailed repository map.
 5. Agent executes payment and returns completion message.
 6. Trigger a blocked scenario (over threshold) to show guardrails stopping money movement.
 
-## Setup and run
+## Local setup
 
-1. Install dependencies:
-
-```bash
-pnpm install
-```
-
-2. Configure `.env.local`:
-
-- `ANTHROPIC_API_KEY`
-- `CROSSMINT_API_KEY`
-- `CROSSMINT_ENVIRONMENT`
-- `WALLET_SIGNER_KEY`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `MAX_TRANSACTION_AMOUNT` (optional, defaults to `50`)
-- `FUNDED_WALLET_ADDRESS` (optional)
-- Shipping defaults (optional):
-  - `RECIPIENT_EMAIL`
-  - `RECIPIENT_NAME`
-  - `RECIPIENT_ADDRESS_LINE1`
-  - `RECIPIENT_ADDRESS_CITY`
-  - `RECIPIENT_ADDRESS_STATE`
-  - `RECIPIENT_ADDRESS_ZIP`
-  - `RECIPIENT_ADDRESS_COUNTRY`
-
-3. Start dev server:
-
-```bash
-pnpm dev
-```
-
-4. Configure Twilio WhatsApp webhook:
-
-`POST /api/whatsapp`
-
-## Scripts
-
-- `pnpm dev` - run local dev server
-- `pnpm build` - build production bundle
-- `pnpm start` - run production server
-- `pnpm lint` - run ESLint
+Installation, environment variables, scripts, and local run instructions live in `README.pre-hackathon.md`.

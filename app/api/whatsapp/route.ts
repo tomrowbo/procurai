@@ -34,8 +34,9 @@ const PRODUCT_IMAGE_BY_ASIN: Record<string, string> = {
   B00NH13G5A: "https://m.media-amazon.com/images/I/71q3M4K22BL._AC_SL1500_.jpg",
   B00DUGZFWY: "https://m.media-amazon.com/images/I/71jP-5N6LwL._AC_SL1500_.jpg",
   B07FZ8S74R: "https://m.media-amazon.com/images/I/714Rq4k05UL._AC_SL1000_.jpg",
-  B0756CYWWD: "https://m.media-amazon.com/images/I/61N4d6fJXKL._AC_SL1500_.jpg",
-  B074TDJQT8: "https://m.media-amazon.com/images/I/61uM7n8P7XL._AC_SL1500_.jpg",
+  B00006IE8J: "https://m.media-amazon.com/images/I/71h7M9xJq-L._AC_SL1500_.jpg",
+  B01GGKYYT0: "https://m.media-amazon.com/images/I/61otj0q5H-L._AC_SL1500_.jpg",
+  B00LH3DMUO: "https://m.media-amazon.com/images/I/81M0hYf4A9L._AC_SL1500_.jpg",
 };
 
 function isImageRequest(message: string): boolean {
@@ -64,6 +65,32 @@ export async function POST(req: NextRequest) {
   let replyText: string;
   let newState = session.state;
   let mediaUrls: string[] = [];
+
+  // Handle image requests from current session deterministically, without relying on model state transitions.
+  if (isImageRequest(body) && session.state.products?.length) {
+    const products = session.state.products.slice(0, 3);
+    mediaUrls = products
+      .map((product) => product.imageUrl || PRODUCT_IMAGE_BY_ASIN[product.asin])
+      .filter((url): url is string => Boolean(url));
+
+    if (mediaUrls.length > 0) {
+      const productLines = products
+        .slice(0, mediaUrls.length)
+        .map((p, idx) => `${idx + 1}. ${p.title}`)
+        .join("\n");
+      replyText = `Here are product images:\n${productLines}\n\nReply 1, 2, or 3 to select a product.`;
+    } else {
+      replyText = "I could not fetch product images right now, but you can still reply 1, 2, or 3 to choose.";
+    }
+
+    updateSession(from, session.state, body, replyText);
+    const twiml = new twilio.twiml.MessagingResponse();
+    const message = twiml.message(replyText);
+    mediaUrls.forEach((url) => message.media(url));
+    return new NextResponse(twiml.toString(), {
+      headers: { "Content-Type": "text/xml" },
+    });
+  }
 
   try {
     const agentResponse = await processMessage(body, session.state, session.history);
