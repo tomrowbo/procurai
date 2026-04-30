@@ -3,29 +3,42 @@
 import { useEffect, useState } from "react";
 import { Check, Loader2, ShoppingBag } from "lucide-react";
 
-type Msg =
+type ScriptMsg =
+  | { from: "user"; text: string }
+  | { from: "agent"; text: string }
+  | { from: "action"; text: string; amount?: string };
+
+type VisibleMsg =
   | { from: "user"; text: string }
   | { from: "agent"; text: string }
   | { from: "action"; text: string; amount?: string; status: "running" | "done" };
 
-const SCRIPT: Msg[] = [
-  { from: "user", text: "Run procurement for our 80-person hackathon Saturday. Budget $8.5k." },
-  { from: "agent", text: "On it. Catering, swag, and prizes — I'll handle quotes and payment." },
-  { from: "action", text: "Sourcing vendors", status: "running" },
-  { from: "action", text: "Negotiated catering · −14%", amount: "$3,284.50", status: "done" },
-  { from: "agent", text: "Got 3 quotes. Approving the best bundle now." },
-  { from: "action", text: "Virtual card issued · merchant-locked", status: "running" },
-  { from: "action", text: "Order #HX-22841 confirmed", amount: "paid", status: "done" },
-  { from: "agent", text: "Done. Receipts synced. You're set for Saturday 🎉" },
+const SCRIPT: ScriptMsg[] = [
+  { from: "user", text: "Order branded socks for 200 hackathon attendees + pay all suppliers. Budget $6k." },
+  { from: "agent", text: "On it — socks, supplier payments, all of it. Getting quotes now." },
+  { from: "action", text: "Sourcing sock vendors" },
+  { from: "action", text: "Printful · 200 branded socks · −11%", amount: "$1,140" },
+  { from: "agent", text: "Best bundle secured. Paying suppliers now." },
+  { from: "action", text: "Virtual card issued · merchant-locked" },
+  { from: "action", text: "Order #HC-4821 confirmed · socks + suppliers", amount: "paid" },
+  { from: "agent", text: "All paid. Socks ship Monday. You're good for the hackathon 🎉" },
 ];
 
 export function PhoneDemo() {
-  const [visible, setVisible] = useState<Msg[]>([]);
+  const [visible, setVisible] = useState<VisibleMsg[]>([]);
 
   useEffect(() => {
     let i = 0;
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const flipLastRunning = () => {
+      setVisible(v => {
+        const idx = v.map((m, i) => ({ m, i })).reverse().find(({ m }) => m.from === "action" && m.status === "running")?.i;
+        if (idx === undefined) return v;
+        return v.map((m, j) => j === idx ? { ...m, status: "done" as const } : m);
+      });
+    };
 
     const tick = () => {
       if (cancelled) return;
@@ -38,9 +51,17 @@ export function PhoneDemo() {
         }, 3500));
         return;
       }
-      const msg = SCRIPT[i];
+      const script = SCRIPT[i];
       i++;
-      setVisible((v) => [...v, msg]);
+
+      if (script.from === "action") {
+        const msg: VisibleMsg = { ...script, status: "running" };
+        setVisible(v => [...v, msg]);
+        timers.push(setTimeout(flipLastRunning, 900));
+      } else {
+        setVisible(v => [...v, script]);
+      }
+
       timers.push(setTimeout(tick, 1500));
     };
 
@@ -89,17 +110,17 @@ export function PhoneDemo() {
       {/* Floating chip */}
       <div className="absolute -left-6 top-24 hidden rotate-[-6deg] rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg sm:block">
         <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">paid</p>
-        <p className="font-display text-sm font-semibold text-foreground">$3,284.50</p>
+        <p className="font-display text-sm font-semibold text-foreground">$1,140</p>
       </div>
       <div className="absolute -right-4 bottom-32 hidden rotate-[5deg] rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg sm:block">
         <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">vendor</p>
-        <p className="font-display text-sm font-semibold text-foreground">Insomnia · −14%</p>
+        <p className="font-display text-sm font-semibold text-foreground">Printful · −11%</p>
       </div>
     </div>
   );
 }
 
-function MsgBubble({ m }: { m: Msg }) {
+function MsgBubble({ m }: { m: VisibleMsg }) {
   if (m.from === "user") {
     return (
       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-300">

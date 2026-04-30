@@ -14,22 +14,22 @@ type FormData = {
 type ChatMsg =
   | { from: "sourcy"; text: string }
   | { from: "user"; text: string }
-  | { from: "action"; text: string; done?: boolean };
+  | { from: "action"; text: string; done: boolean };
 
 const PROCUREMENT_SCRIPT: ChatMsg[] = [
-  { from: "sourcy", text: "Got it! Starting your procurement now 🚀" },
-  { from: "action", text: "Parsing your requirements..." },
-  { from: "action", text: "Shortlisting vendors...", done: true },
-  { from: "sourcy", text: "Found 4 suppliers. Requesting quotes now." },
-  { from: "action", text: "Negotiating prices...", done: true },
-  { from: "sourcy", text: "Negotiated 12% off the best quote 💪" },
-  { from: "action", text: "Issuing virtual card · merchant-locked", done: true },
-  { from: "action", text: "Payment authorised · order confirmed ✓", done: true },
-  { from: "sourcy", text: "All done! Receipt sent. Check your WhatsApp for the full breakdown 🎉" },
+  { from: "sourcy", text: "On it! Sourcing socks and lining up your hackathon suppliers 🚀" },
+  { from: "action", text: "Finding sock vendors...", done: false },
+  { from: "action", text: "Printful · 200 branded socks · −11% · $1,140", done: false },
+  { from: "sourcy", text: "Best quote locked in. Paying suppliers now." },
+  { from: "action", text: "Paying catering & venue suppliers...", done: false },
+  { from: "sourcy", text: "Negotiated an extra 8% off catering 💪" },
+  { from: "action", text: "Virtual card issued · merchant-locked", done: false },
+  { from: "action", text: "All orders confirmed · receipts sent", done: false },
+  { from: "sourcy", text: "Done! Socks ship Monday. All suppliers paid. Check WhatsApp for receipts 🎉" },
 ];
 
 export default function TryPage() {
-  const [form, setForm] = useState<FormData>({ phone: "", request: "", budget: "" });
+  const [form, setForm] = useState<FormData>({ phone: "", request: "Order 200 branded socks for hackathon giveaways + pay catering and venue suppliers for Saturday", budget: "$6,000" });
   const [submitted, setSubmitted] = useState(false);
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [typing, setTyping] = useState(false);
@@ -45,6 +45,14 @@ export default function TryPage() {
     };
     setChat([userMsg]);
 
+    const flipLastRunning = () => {
+      setChat(c => {
+        const idx = c.map((m, i) => ({ m, i })).reverse().find(({ m }) => m.from === "action" && !m.done)?.i;
+        if (idx === undefined) return c;
+        return c.map((m, j) => j === idx && m.from === "action" ? { ...m, done: true } : m);
+      });
+    };
+
     let delay = 800;
     PROCUREMENT_SCRIPT.forEach((msg, i) => {
       const isLast = i === PROCUREMENT_SCRIPT.length - 1;
@@ -57,8 +65,10 @@ export default function TryPage() {
         }, delay);
         delay += isLast ? 0 : 600;
       } else {
-        setTimeout(() => setChat((c) => [...c, msg]), delay);
-        delay += 900;
+        setTimeout(() => setChat((c) => [...c, { ...msg, done: false }]), delay);
+        delay += 800;
+        setTimeout(flipLastRunning, delay);
+        delay += 700;
       }
     });
   }
