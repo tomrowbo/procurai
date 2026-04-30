@@ -27,10 +27,13 @@ export function updateSession(
 ): void {
   const session = getSession(phone);
   session.state = state;
-  session.history.push(
-    { role: "user", content: userMessage },
-    { role: "assistant", content: assistantReply }
-  );
+  // Only add to history if both messages are non-empty
+  if (userMessage && assistantReply) {
+    session.history.push(
+      { role: "user", content: userMessage },
+      { role: "assistant", content: assistantReply }
+    );
+  }
   // Keep last 20 messages to avoid context bloat
   if (session.history.length > 20) {
     session.history = session.history.slice(-20);
