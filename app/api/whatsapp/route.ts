@@ -4,6 +4,29 @@ import { processMessage } from "@/lib/agent";
 import { getSession, updateSession, resetSession } from "@/lib/conversation";
 import { checkTransaction, recordSpending } from "@/lib/trust";
 import { createOrder } from "@/lib/checkout";
+import { Product } from "@/types";
+
+async function purchaseProduct(product: Product, from: string): Promise<string> {
+  const trustCheck = checkTransaction(product, from);
+  if (!trustCheck.approved) {
+    return `Blocked: ${product.title} — ${trustCheck.reason}`;
+  }
+
+  try {
+    const order = await createOrder(product, from);
+    recordSpending(from, product.price);
+    if (order.status === "paid") {
+      return `${product.title} — $${product.price} — Paid!`;
+    } else if (order.status === "quote-invalid") {
+      return `${product.title} — Not available on Amazon right now`;
+    } else {
+      return `${product.title} — $${product.price} — ${order.status}`;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return `${product.title} — Failed: ${message}`;
+  }
+}
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -25,32 +48,31 @@ export async function POST(req: NextRequest) {
     replyText = agentResponse.reply;
     newState = agentResponse.newState;
 
-    // Agent signalled to purchase — execute it here
+    // Single purchase
     if (newState.stage === "purchasing" && newState.selectedProduct) {
-      const product = newState.selectedProduct;
-      const trustCheck = checkTransaction(product, from);
+      const result = await purchaseProduct(newState.selectedProduct, from);
+      replyText = `Order complete!\n\n${result}\n\nThank you!`;
+      newState = { stage: "done" };
+    }
 
-      if (!trustCheck.approved) {
-        replyText = `Purchase blocked: ${trustCheck.reason}`;
-        newState = { stage: "idle" };
-      } else {
-        try {
-          const order = await createOrder(product, from);
-          recordSpending(from, product.price);
-          replyText =
-            `Order placed!\n\n` +
-            `Product: ${product.title}\n` +
-            `Price: $${product.price}\n` +
-            `Order ID: ${order.orderId}\n` +
-            `Status: ${order.status}\n\n` +
-            `Thank you!`;
-          newState = { stage: "done" };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          replyText = `Order failed: ${message}\n\nPlease try again.`;
-          newState = { stage: "idle" };
+    // Batch purchase
+    if (newState.stage === "batch-purchasing" && newState.selectedProducts?.length) {
+      const results: string[] = [];
+      let totalSpent = 0;
+
+      for (const product of newState.selectedProducts) {
+        const result = await purchaseProduct(product, from);
+        results.push(result);
+        if (result.includes("Paid!")) {
+          totalSpent += product.price;
         }
       }
+
+      replyText =
+        `Batch order complete!\n\n` +
+        results.map((r, i) => `${i + 1}. ${r}`).join("\n") +
+        `\n\nTotal spent: $${totalSpent.toFixed(2)}`;
+      newState = { stage: "done" };
     }
 
     updateSession(from, newState, body, replyText);

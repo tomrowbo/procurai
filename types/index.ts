@@ -6,10 +6,11 @@ export interface WhatsAppMessage {
 }
 
 export interface ConversationState {
-  stage: "idle" | "searching" | "reviewing" | "confirming" | "purchasing" | "done";
+  stage: "idle" | "searching" | "reviewing" | "confirming" | "purchasing" | "batch-confirming" | "batch-purchasing" | "done";
   searchQuery?: string;
   products?: Product[];
   selectedProduct?: Product;
+  selectedProducts?: Product[];
   walletAddress?: string;
 }
 
