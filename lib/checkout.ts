@@ -24,7 +24,7 @@ export async function createOrder(
     body: JSON.stringify({
       payment: {
         method: "base-sepolia",
-        currency: "usdc",
+        currency: "usdxm",
         payerAddress: walletAddress,
       },
       lineItems: [

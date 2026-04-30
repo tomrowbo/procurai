@@ -48,18 +48,35 @@ export async function getOrCreateWallet(userPhone: string): Promise<string> {
 
 export async function getWalletBalance(address: string): Promise<number> {
   const res = await fetch(
-    `${CROSSMINT_BASE}/2025-06-09/wallets/${address}/balances`,
+    `${CROSSMINT_BASE.replace("/api", "")}/api/v1-alpha2/wallets/${address}/balances?tokens=usdxm&chains=base-sepolia`,
     { headers: getHeaders() }
   );
 
   if (!res.ok) return 0;
 
   const data = await res.json();
-  // Find USDC balance
-  for (const token of data || []) {
-    if (token.token?.toLowerCase() === "usdc") {
-      return parseFloat(token.amount || "0");
-    }
+  if (Array.isArray(data) && data.length > 0) {
+    const raw = data[0]?.balances?.["base-sepolia"] || data[0]?.balances?.total || "0";
+    return parseFloat(raw) / 1e6; // 6 decimals
   }
   return 0;
+}
+
+export async function fundWallet(address: string, amount: number = 100): Promise<string> {
+  const res = await fetch(
+    `${CROSSMINT_BASE.replace("/api", "")}/api/v1-alpha2/wallets/${address}/balances`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ amount, token: "usdxm", chain: "base-sepolia" }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Funding failed: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.txId;
 }
