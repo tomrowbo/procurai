@@ -4,7 +4,10 @@ import { processMessage } from "@/lib/agent";
 import { getSession, updateSession, resetSession } from "@/lib/conversation";
 import { checkTransaction, recordSpending } from "@/lib/trust";
 import { createOrder } from "@/lib/checkout";
+import { sendWhatsApp } from "@/lib/twilio";
 import { Product } from "@/types";
+
+export const maxDuration = 60;
 
 async function purchaseProduct(product: Product, from: string): Promise<string> {
   const trustCheck = checkTransaction(product, from);
@@ -16,9 +19,9 @@ async function purchaseProduct(product: Product, from: string): Promise<string> 
     const order = await createOrder(product, from);
     recordSpending(from, product.price);
     if (order.status === "paid") {
-      return `${product.title} — $${product.price} — Paid!`;
+      return `${product.title} — $${product.price} — Paid!\nhttps://amazon.com/dp/${product.asin}`;
     } else if (order.status === "quote-invalid") {
-      return `${product.title} — Not available on Amazon right now`;
+      return `${product.title} — Not available right now`;
     } else {
       return `${product.title} — $${product.price} — ${order.status}`;
     }
@@ -61,6 +64,7 @@ export async function POST(req: NextRequest) {
     replyText = agentResponse.reply;
     newState = agentResponse.newState;
 
+    // Offer images when showing products
     if (
       newState.stage === "reviewing" &&
       Array.isArray(newState.products) &&
@@ -70,6 +74,7 @@ export async function POST(req: NextRequest) {
       replyText += "\n\nWant to see product images? Reply IMAGES.";
     }
 
+    // Handle image requests
     if (newState.stage === "reviewing" && isImageRequest(body)) {
       mediaUrls = newState.products
         ?.map((product) => product.imageUrl || PRODUCT_IMAGE_BY_ASIN[product.asin])
@@ -87,31 +92,59 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Agent signalled to purchase — execute it here
+    // Single purchase — reply immediately, process async
     if (newState.stage === "purchasing" && newState.selectedProduct) {
-      const result = await purchaseProduct(newState.selectedProduct, from);
-      replyText = `Order complete!\n\n${result}\n\nThank you!`;
-      newState = { stage: "done" };
+      const product = newState.selectedProduct;
+      updateSession(from, newState, body, "Processing your order...");
+
+      const twiml = new twilio.twiml.MessagingResponse();
+      twiml.message(`Processing your order for ${product.title}...`);
+
+      purchaseProduct(product, from).then(async (result) => {
+        const msg = `Order complete!\n\n${result}\n\nThank you!`;
+        await sendWhatsApp(from, msg).catch(console.error);
+        updateSession(from, { stage: "done" }, "", msg);
+        setTimeout(() => resetSession(from), 10_000);
+      });
+
+      return new NextResponse(twiml.toString(), {
+        headers: { "Content-Type": "text/xml" },
+      });
     }
 
-    // Batch purchase
+    // Batch purchase — reply immediately, process async
     if (newState.stage === "batch-purchasing" && newState.selectedProducts?.length) {
-      const results: string[] = [];
-      let totalSpent = 0;
+      const products = newState.selectedProducts;
+      updateSession(from, newState, body, `Processing ${products.length} items...`);
 
-      for (const product of newState.selectedProducts) {
-        const result = await purchaseProduct(product, from);
-        results.push(result);
-        if (result.includes("Paid!")) {
-          totalSpent += product.price;
+      const twiml = new twilio.twiml.MessagingResponse();
+      twiml.message(`Processing ${products.length} items... I'll message you when done!`);
+
+      (async () => {
+        const results: string[] = [];
+        let totalSpent = 0;
+
+        for (const product of products) {
+          const result = await purchaseProduct(product, from);
+          results.push(result);
+          if (result.includes("Paid!")) {
+            totalSpent += product.price;
+          }
         }
-      }
 
-      replyText =
-        `Batch order complete!\n\n` +
-        results.map((r, i) => `${i + 1}. ${r}`).join("\n") +
-        `\n\nTotal spent: $${totalSpent.toFixed(2)}`;
-      newState = { stage: "done" };
+        const msg =
+          `Batch order complete!\n\n` +
+          results.map((r, i) => `${i + 1}. ${r}`).join("\n\n") +
+          `\n\nTotal spent: $${totalSpent.toFixed(2)}`;
+
+        await sendWhatsApp(from, msg).catch(console.error);
+        updateSession(from, { stage: "done" }, "", msg);
+        setTimeout(() => resetSession(from), 10_000);
+      })();
+
+      return new NextResponse(twiml.toString(), {
+        headers: { "Content-Type": "text/xml" },
+      });
     }
 
     updateSession(from, newState, body, replyText);

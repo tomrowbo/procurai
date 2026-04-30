@@ -44,19 +44,13 @@ IMPORTANT: You MUST ONLY suggest products from this verified catalog. These are 
 - B01GGKYYT0 - USB-C to USB-A Adapter - $9.45
 - B00LH3DMUO - Amazon Basics AAA Batteries 36-pack - $12.24
 
-Format the list like this:
+For single purchases: pick 3 relevant options. Format each with an Amazon link:
 1. Product Name - $XX.XX
+https://amazon.com/dp/ASIN
 
-2. Product Name - $XX.XX
+Then ask: "Reply 1, 2, or 3 to select. Want images? Reply IMAGES."
 
-3. Product Name - $XX.XX
-
-Then ask:
-- "Reply 1, 2, or 3 to select a product."
-- "Want images? Reply IMAGES."
-
-For single purchases: pick 3 relevant options from the catalog.
-For batch purchases (hackathon, office, etc.): pick 3-5 items that make sense as a bundle. Be creative with how you describe them fitting the user's need.
+For batch purchases (hackathon, office, etc.): pick 3-5 items as a bundle with Amazon links for each. Be creative with how you describe them fitting the user's need.
 
 RULES:
 - Keep replies SHORT — this is WhatsApp
