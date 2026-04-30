@@ -1,7 +1,9 @@
 import { Product } from "@/types";
-import { getOrCreateWallet, fundWallet, submitAndApproveTransaction } from "@/lib/wallet";
+import { getOrCreateWallet, fundWallet, submitAndApproveTransaction, getChain, getToken } from "@/lib/wallet";
 
-const CROSSMINT_BASE = process.env.CROSSMINT_ENVIRONMENT === "staging"
+const isStaging = process.env.CROSSMINT_ENVIRONMENT === "staging";
+
+const CROSSMINT_BASE = isStaging
   ? "https://staging.crossmint.com/api"
   : "https://www.crossmint.com/api";
 
@@ -15,22 +17,25 @@ function getHeaders() {
 export async function createOrder(
   product: Product,
   userPhone: string
-): Promise<{ orderId: string; status: string; quote?: unknown }> {
+): Promise<{ orderId: string; status: string; quote?: unknown; txHash?: string }> {
   const walletAddress = await getOrCreateWallet(userPhone);
 
-  // Auto-fund wallet on staging for demo
-  if (process.env.CROSSMINT_ENVIRONMENT === "staging") {
+  // Auto-fund on staging only
+  if (isStaging) {
     await fundWallet(walletAddress, 100).catch(() => {});
   }
 
-  // 1. Create order to get quote
+  const chain = getChain();
+  const token = getToken();
+
+  // 1. Create order
   const res = await fetch(`${CROSSMINT_BASE}/2022-06-09/orders`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({
       payment: {
-        method: "base-sepolia",
-        currency: "usdxm",
+        method: chain,
+        currency: token,
         payerAddress: walletAddress,
       },
       lineItems: [
@@ -70,7 +75,7 @@ export async function createOrder(
     };
   }
 
-  // 2. Get payment preparation (serialized transaction)
+  // 2. Get payment preparation
   const orderDetails = await fetch(`${CROSSMINT_BASE}/2022-06-09/orders/${orderId}`, {
     headers: getHeaders(),
   }).then((r) => r.json());
@@ -80,23 +85,30 @@ export async function createOrder(
     return { orderId, status: "no-payment-prep", quote: order.quote };
   }
 
-  // 3. Extract the ERC20 transfer call from serialized tx
+  // 3. Extract ERC20 transfer call from serialized tx
   const serialized = prep.serializedTransaction;
   const transferIdx = serialized.indexOf("a9059cbb");
   if (transferIdx === -1) {
     throw new Error("Could not parse payment transaction");
   }
 
-  const tokenContract = "0x14196f08a4fa0b66b7331bc40dd6bcd8a1deea9f"; // USDXM on base-sepolia
+  // Extract the token contract address from the serialized tx
+  // Format: ...94<40-char-address>80... where 94 is the RLP prefix before the to address
+  // Or just use the known contracts
+  const tokenContract = isStaging
+    ? "0x14196f08a4fa0b66b7331bc40dd6bcd8a1deea9f"  // USDXM on Base Sepolia
+    : "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"; // USDC on Base
+
   const callData = "0x" + serialized.slice(transferIdx);
 
-  // 4. Submit and auto-approve the payment transaction
+  // 4. Submit and auto-approve payment
   const txResult = await submitAndApproveTransaction(walletAddress, tokenContract, callData);
 
   return {
     orderId,
     status: txResult.status === "success" ? "paid" : "payment-pending",
     quote: order.quote,
+    txHash: txResult.txHash,
   };
 }
 

@@ -1,11 +1,15 @@
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 
-// Per-user wallet creation via Crossmint API (v2025, server signer)
-const CROSSMINT_BASE = process.env.CROSSMINT_ENVIRONMENT === "staging"
+const isStaging = process.env.CROSSMINT_ENVIRONMENT === "staging";
+
+const CROSSMINT_BASE = isStaging
   ? "https://staging.crossmint.com/api"
   : "https://www.crossmint.com/api";
 
 const CROSSMINT_BASE_LEGACY = CROSSMINT_BASE.replace("/api", "") + "/api";
+
+const CHAIN = isStaging ? "base-sepolia" : "base";
+const TOKEN = isStaging ? "usdxm" : "usdc";
 
 function getHeaders() {
   return {
@@ -14,15 +18,22 @@ function getHeaders() {
   };
 }
 
-// Deterministic server signer key -- one key signs for all wallets
+// Server signer key for auto-approving transactions
 const SIGNER_PRIVATE_KEY = (process.env.WALLET_SIGNER_KEY || generatePrivateKey()) as `0x${string}`;
 const signerAccount = privateKeyToAccount(SIGNER_PRIVATE_KEY);
 
-// Cache wallets by phone number
 const walletCache = new Map<string, string>();
 
 export function getSignerAddress(): string {
   return signerAccount.address;
+}
+
+export function getChain(): string {
+  return CHAIN;
+}
+
+export function getToken(): string {
+  return TOKEN;
 }
 
 export async function getOrCreateWallet(userPhone: string): Promise<string> {
@@ -60,7 +71,7 @@ export async function getOrCreateWallet(userPhone: string): Promise<string> {
 
 export async function getWalletBalance(address: string): Promise<number> {
   const res = await fetch(
-    `${CROSSMINT_BASE_LEGACY}/v1-alpha2/wallets/${address}/balances?tokens=usdxm&chains=base-sepolia`,
+    `${CROSSMINT_BASE_LEGACY}/v1-alpha2/wallets/${address}/balances?tokens=${TOKEN}&chains=${CHAIN}`,
     { headers: getHeaders() }
   );
 
@@ -68,19 +79,24 @@ export async function getWalletBalance(address: string): Promise<number> {
 
   const data = await res.json();
   if (Array.isArray(data) && data.length > 0) {
-    const raw = data[0]?.balances?.["base-sepolia"] || data[0]?.balances?.total || "0";
-    return parseFloat(raw) / 1e6;
+    const raw = data[0]?.balances?.[CHAIN] || data[0]?.balances?.total || "0";
+    return parseFloat(raw) / 1e6; // 6 decimals for both USDC and USDXM
   }
   return 0;
 }
 
 export async function fundWallet(address: string, amount: number = 100): Promise<string> {
+  // Faucet only works on staging
+  if (!isStaging) {
+    throw new Error("Faucet not available on production -- fund wallet with real USDC");
+  }
+
   const res = await fetch(
     `${CROSSMINT_BASE_LEGACY}/v1-alpha2/wallets/${address}/balances`,
     {
       method: "POST",
       headers: getHeaders(),
-      body: JSON.stringify({ amount, token: "usdxm", chain: "base-sepolia" }),
+      body: JSON.stringify({ amount, token: TOKEN, chain: CHAIN }),
     }
   );
 
@@ -93,7 +109,6 @@ export async function fundWallet(address: string, amount: number = 100): Promise
   return data.txId;
 }
 
-// Submit a transaction from wallet and auto-approve with server signer
 export async function submitAndApproveTransaction(
   walletAddress: string,
   to: string,
@@ -106,7 +121,7 @@ export async function submitAndApproveTransaction(
     body: JSON.stringify({
       params: {
         calls: [{ to: to.toLowerCase(), value: "0", data }],
-        chain: "base-sepolia",
+        chain: CHAIN,
       },
     }),
   });
@@ -124,7 +139,7 @@ export async function submitAndApproveTransaction(
     throw new Error("No approval message returned");
   }
 
-  // 2. Sign the message with our server key
+  // 2. Sign with server key
   const signature = await signerAccount.signMessage({ message: { raw: messageToSign as `0x${string}` } });
 
   // 3. Submit approval
@@ -147,7 +162,7 @@ export async function submitAndApproveTransaction(
     throw new Error(`Approval failed: ${err}`);
   }
 
-  // 4. Poll for completion (max 30s)
+  // 4. Poll for confirmation (max 30s)
   for (let i = 0; i < 10; i++) {
     await new Promise((r) => setTimeout(r, 3000));
 
@@ -165,7 +180,7 @@ export async function submitAndApproveTransaction(
         };
       }
       if (statusData.status === "failed") {
-        throw new Error(`Transaction failed on-chain`);
+        throw new Error("Transaction failed on-chain");
       }
     }
   }
