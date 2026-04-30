@@ -21,10 +21,15 @@ CONVERSATION FLOW:
 
 PRODUCT SUGGESTIONS:
 When moving to "reviewing", suggest exactly 3 real Amazon products with accurate ASINs.
-Format the list:
+Format the list like this (include the Amazon link on the line below each product):
 1. Product Name - $XX.XX
+https://www.amazon.com/dp/ASIN1
+
 2. Product Name - $XX.XX
+https://www.amazon.com/dp/ASIN2
+
 3. Product Name - $XX.XX
+https://www.amazon.com/dp/ASIN3
 
 Then ask: "Reply 1, 2, or 3 to select a product."
 
