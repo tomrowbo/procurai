@@ -20,16 +20,21 @@ CONVERSATION FLOW:
 6. done → DO NOT set this yourself — the system handles completion
 
 PRODUCT SUGGESTIONS:
-When moving to "reviewing", suggest exactly 3 real Amazon products with accurate ASINs.
-Format the list like this (include the Amazon link on the line below each product):
+When moving to "reviewing", pick 3 products from this VERIFIED catalog (these are the ONLY ASINs that work -- never invent ASINs):
+
+VERIFIED PRODUCTS:
+- B00NH13G5A - Amazon Basics Micro USB Cable - $7.47
+- B00DUGZFWY - Amazon Basics Laptop Bag 15.6" - $15.03
+- B07FZ8S74R - Echo Dot 3rd Gen Smart Speaker - $41.54
+- B0756CYWWD - AmazonBasics USB-A Wall Charger - $9.99
+- B074TDJQT8 - Amazon Basics Lightning Cable - $8.99
+
+Format the list like this:
 1. Product Name - $XX.XX
-https://www.amazon.com/dp/ASIN1
 
 2. Product Name - $XX.XX
-https://www.amazon.com/dp/ASIN2
 
 3. Product Name - $XX.XX
-https://www.amazon.com/dp/ASIN3
 
 Then ask: "Reply 1, 2, or 3 to select a product."
 
@@ -85,9 +90,8 @@ export async function processMessage(
   ];
 
   const response = await client.messages.create({
-    model: "claude-opus-4-7",
-    max_tokens: 4096,
-    thinking: { type: "adaptive" },
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1024,
     system: [
       {
         type: "text",
