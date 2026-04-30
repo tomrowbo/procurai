@@ -18,7 +18,10 @@ async function purchaseProduct(product: Product, from: string): Promise<string> 
     const order = await createOrder(product, from);
     recordSpending(from, product.price);
     if (order.status === "paid") {
-      return `${product.title} — $${product.price} — Paid!\nhttps://amazon.com/dp/${product.asin}`;
+      const explorer = process.env.CROSSMINT_ENVIRONMENT === "staging"
+        ? `https://sepolia.basescan.org/tx/${order.txHash}`
+        : `https://basescan.org/tx/${order.txHash}`;
+      return `${product.title} — $${product.price} — Paid!\nhttps://amazon.com/dp/${product.asin}\n${explorer}`;
     } else if (order.status === "quote-invalid") {
       return `${product.title} — Not available right now`;
     } else {
