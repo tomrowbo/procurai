@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ProcurAI WhatsApp Procurement Agent
 
-## Getting Started
+ProcurAI is a Next.js app that lets users search and buy Amazon products through WhatsApp, with crypto-based checkout using Crossmint wallets.
 
-First, run the development server:
+## What this app does
+
+- Receives WhatsApp messages via Twilio webhook.
+- Uses an AI agent to guide the user through product search and selection.
+- Enforces trust checks (single transaction + daily spending limits).
+- Creates and pays Crossmint orders from a user-linked wallet.
+
+## Tech stack
+
+- Next.js App Router (`next@16`)
+- TypeScript
+- Twilio (WhatsApp webhook + TwiML response)
+- Anthropic SDK (conversation agent)
+- Crossmint APIs (wallet + order payment)
+- `viem` (server-side message signing for wallet approvals)
+
+## Quick start
+
+1. Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create/update `.env.local` with required variables:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `ANTHROPIC_API_KEY`
+- `CROSSMINT_API_KEY`
+- `CROSSMINT_ENVIRONMENT` (`staging` or production value)
+- `WALLET_SIGNER_KEY` (server signer private key)
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `SPECTER_API_KEY` (optional)
+- `MAX_TRANSACTION_AMOUNT` (optional, defaults to `50`)
+- `FUNDED_WALLET_ADDRESS` (optional for testing)
+- Shipping defaults (optional):
+  - `RECIPIENT_EMAIL`
+  - `RECIPIENT_NAME`
+  - `RECIPIENT_ADDRESS_LINE1`
+  - `RECIPIENT_ADDRESS_CITY`
+  - `RECIPIENT_ADDRESS_STATE`
+  - `RECIPIENT_ADDRESS_ZIP`
+  - `RECIPIENT_ADDRESS_COUNTRY`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Run the app:
 
-## Learn More
+```bash
+pnpm dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+4. Configure your Twilio WhatsApp webhook to:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`POST /api/whatsapp`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
+- `pnpm dev` - run local dev server
+- `pnpm build` - build production bundle
+- `pnpm start` - run production server
+- `pnpm lint` - run ESLint
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Key API routes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `POST /api/whatsapp`
+  - Main webhook entry point.
+  - Parses Twilio form data, processes conversation state, runs trust checks, creates orders, and replies with TwiML.
+- `GET /api/test-payment?step=<step>`
+  - Payment/wallet test harness.
+  - Supported steps: `wallet`, `fund`, `balance`, `trust`, `order`, `full`.
+
+## Architecture docs
+
+See `PROJECT_STRUCTURE.md` for the folder-level map and runtime flow.

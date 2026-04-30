@@ -28,6 +28,18 @@ async function purchaseProduct(product: Product, from: string): Promise<string> 
   }
 }
 
+const PRODUCT_IMAGE_BY_ASIN: Record<string, string> = {
+  B00NH13G5A: "https://m.media-amazon.com/images/I/71q3M4K22BL._AC_SL1500_.jpg",
+  B00DUGZFWY: "https://m.media-amazon.com/images/I/71jP-5N6LwL._AC_SL1500_.jpg",
+  B07FZ8S74R: "https://m.media-amazon.com/images/I/714Rq4k05UL._AC_SL1000_.jpg",
+  B0756CYWWD: "https://m.media-amazon.com/images/I/61N4d6fJXKL._AC_SL1500_.jpg",
+  B074TDJQT8: "https://m.media-amazon.com/images/I/61uM7n8P7XL._AC_SL1500_.jpg",
+};
+
+function isImageRequest(message: string): boolean {
+  return /(image|images|photo|photos|picture|pictures|pic|pics)/i.test(message);
+}
+
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const from = formData.get("From") as string;
@@ -42,13 +54,40 @@ export async function POST(req: NextRequest) {
   const session = getSession(from);
   let replyText: string;
   let newState = session.state;
+  let mediaUrls: string[] = [];
 
   try {
     const agentResponse = await processMessage(body, session.state, session.history);
     replyText = agentResponse.reply;
     newState = agentResponse.newState;
 
-    // Single purchase
+    if (
+      newState.stage === "reviewing" &&
+      Array.isArray(newState.products) &&
+      newState.products.length > 0 &&
+      !/image|photo|picture/i.test(replyText)
+    ) {
+      replyText += "\n\nWant to see product images? Reply IMAGES.";
+    }
+
+    if (newState.stage === "reviewing" && isImageRequest(body)) {
+      mediaUrls = newState.products
+        ?.map((product) => product.imageUrl || PRODUCT_IMAGE_BY_ASIN[product.asin])
+        .filter((url): url is string => Boolean(url))
+        .slice(0, 3) || [];
+
+      if (mediaUrls.length > 0) {
+        const productLines = newState.products
+          ?.slice(0, mediaUrls.length)
+          .map((p, idx) => `${idx + 1}. ${p.title}`)
+          .join("\n");
+        replyText = `Here are product images:\n${productLines}\n\nReply 1, 2, or 3 to select a product.`;
+      } else {
+        replyText = "I could not fetch product images right now, but you can still reply 1, 2, or 3 to choose.";
+      }
+    }
+
+    // Agent signalled to purchase — execute it here
     if (newState.stage === "purchasing" && newState.selectedProduct) {
       const result = await purchaseProduct(newState.selectedProduct, from);
       replyText = `Order complete!\n\n${result}\n\nThank you!`;
@@ -87,7 +126,8 @@ export async function POST(req: NextRequest) {
   }
 
   const twiml = new twilio.twiml.MessagingResponse();
-  twiml.message(replyText);
+  const message = twiml.message(replyText);
+  mediaUrls.forEach((url) => message.media(url));
 
   return new NextResponse(twiml.toString(), {
     headers: { "Content-Type": "text/xml" },

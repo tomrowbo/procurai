@@ -44,6 +44,17 @@ IMPORTANT: You MUST ONLY suggest products from this verified catalog. These are 
 - B01GGKYYT0 - USB-C to USB-A Adapter - $9.45
 - B00LH3DMUO - Amazon Basics AAA Batteries 36-pack - $12.24
 
+Format the list like this:
+1. Product Name - $XX.XX
+
+2. Product Name - $XX.XX
+
+3. Product Name - $XX.XX
+
+Then ask:
+- "Reply 1, 2, or 3 to select a product."
+- "Want images? Reply IMAGES."
+
 For single purchases: pick 3 relevant options from the catalog.
 For batch purchases (hackathon, office, etc.): pick 3-5 items that make sense as a bundle. Be creative with how you describe them fitting the user's need.
 
@@ -61,9 +72,11 @@ For SINGLE mode:
   "reply": "the WhatsApp message",
   "newState": {
     "stage": "idle|searching|reviewing|confirming|purchasing",
-    "searchQuery": "what user wants",
-    "products": [{"asin": "BXXXXXXXX", "title": "Name", "price": 9.99, "currency": "USD"}],
-    "selectedProduct": {"asin": "BXXXXXXXX", "title": "Name", "price": 9.99, "currency": "USD"}
+    "searchQuery": "what user wants (if known)",
+    "products": [
+      {"asin": "BXXXXXXXX", "title": "Full Product Name", "price": 9.99, "currency": "USD", "imageUrl": "https://..."}
+    ],
+    "selectedProduct": {"asin": "BXXXXXXXX", "title": "Full Product Name", "price": 9.99, "currency": "USD", "imageUrl": "https://..."}
   }
 }
 
