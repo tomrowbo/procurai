@@ -3,7 +3,6 @@ import { processMessage } from "@/lib/agent";
 import { getSession, updateSession, resetSession } from "@/lib/conversation";
 import { checkTransaction, recordSpending } from "@/lib/trust";
 import { createOrder } from "@/lib/checkout";
-import { sendWhatsApp } from "@/lib/twilio";
 import { Product } from "@/types";
 
 export const maxDuration = 60;
@@ -69,7 +68,7 @@ export async function POST(req: NextRequest) {
   let newState = session.state;
   let mediaUrls: string[] = [];
 
-  // Handle image requests from current session deterministically, without relying on model state transitions.
+  // Handle image requests deterministically
   if (isImageRequest(body) && session.state.products?.length) {
     const products = session.state.products.slice(0, 3);
     mediaUrls = products
@@ -105,67 +104,31 @@ export async function POST(req: NextRequest) {
       replyText += "\n\nWant to see product images? Reply IMAGES.";
     }
 
-    // Handle image requests
-    if (newState.stage === "reviewing" && isImageRequest(body)) {
-      mediaUrls = newState.products
-        ?.map((product) => product.imageUrl || PRODUCT_IMAGE_BY_ASIN[product.asin])
-        .filter((url): url is string => Boolean(url))
-        .slice(0, 3) || [];
-
-      if (mediaUrls.length > 0) {
-        const productLines = newState.products
-          ?.slice(0, mediaUrls.length)
-          .map((p, idx) => `${idx + 1}. ${p.title}`)
-          .join("\n");
-        replyText = `Here are product images:\n${productLines}\n\nReply 1, 2, or 3 to select a product.`;
-      } else {
-        replyText = "I could not fetch product images right now, but you can still reply 1, 2, or 3 to choose.";
-      }
-    }
-
-    // Single purchase — reply immediately, process async via Twilio API
+    // Single purchase — wait for it (maxDuration=60s gives us time)
     if (newState.stage === "purchasing" && newState.selectedProduct) {
-      const product = newState.selectedProduct;
-      updateSession(from, newState, body, "Processing your order...");
-
-      purchaseProduct(product, from).then(async (result) => {
-        const msg = `Order complete!\n\n${result}\n\nThank you!`;
-        await sendWhatsApp(from, msg).catch(console.error);
-        updateSession(from, { stage: "done" }, "", msg);
-        setTimeout(() => resetSession(from), 10_000);
-      });
-
-      return twimlResponse(`Processing your order for ${product.title}...`);
+      const result = await purchaseProduct(newState.selectedProduct, from);
+      replyText = `Order complete!\n\n${result}\n\nThank you!`;
+      newState = { stage: "done" };
     }
 
-    // Batch purchase — reply immediately, process async
+    // Batch purchase — wait for all
     if (newState.stage === "batch-purchasing" && newState.selectedProducts?.length) {
-      const products = newState.selectedProducts;
-      updateSession(from, newState, body, `Processing ${products.length} items...`);
+      const results: string[] = [];
+      let totalSpent = 0;
 
-      (async () => {
-        const results: string[] = [];
-        let totalSpent = 0;
-
-        for (const product of products) {
-          const result = await purchaseProduct(product, from);
-          results.push(result);
-          if (result.includes("Paid!")) {
-            totalSpent += product.price;
-          }
+      for (const product of newState.selectedProducts) {
+        const result = await purchaseProduct(product, from);
+        results.push(result);
+        if (result.includes("Paid!")) {
+          totalSpent += product.price;
         }
+      }
 
-        const msg =
-          `Batch order complete!\n\n` +
-          results.map((r, i) => `${i + 1}. ${r}`).join("\n\n") +
-          `\n\nTotal spent: $${totalSpent.toFixed(2)}`;
-
-        await sendWhatsApp(from, msg).catch(console.error);
-        updateSession(from, { stage: "done" }, "", msg);
-        setTimeout(() => resetSession(from), 10_000);
-      })();
-
-      return twimlResponse(`Processing ${products.length} items... I'll message you when done!`);
+      replyText =
+        `Batch order complete!\n\n` +
+        results.map((r, i) => `${i + 1}. ${r}`).join("\n\n") +
+        `\n\nTotal spent: $${totalSpent.toFixed(2)}`;
+      newState = { stage: "done" };
     }
 
     updateSession(from, newState, body, replyText);
