@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import twilio from "twilio";
 import { processMessage } from "@/lib/agent";
 import { getSession, updateSession, resetSession } from "@/lib/conversation";
 import { checkTransaction, recordSpending } from "@/lib/trust";
@@ -41,6 +40,13 @@ const PRODUCT_IMAGE_BY_ASIN: Record<string, string> = {
 
 function isImageRequest(message: string): boolean {
   return /(image|images|photo|photos|picture|pictures|pic|pics)/i.test(message);
+}
+
+function twimlResponse(text: string, mediaUrls: string[] = []): NextResponse {
+  const escapedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const mediaXml = mediaUrls.map((url) => `<Media>${url}</Media>`).join("");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapedText}${mediaXml}</Message></Response>`;
+  return new NextResponse(xml, { headers: { "Content-Type": "text/xml" } });
 }
 
 export async function POST(req: NextRequest) {
@@ -92,13 +98,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Single purchase — reply immediately, process async
+    // Single purchase — reply immediately, process async via Twilio API
     if (newState.stage === "purchasing" && newState.selectedProduct) {
       const product = newState.selectedProduct;
       updateSession(from, newState, body, "Processing your order...");
-
-      const twiml = new twilio.twiml.MessagingResponse();
-      twiml.message(`Processing your order for ${product.title}...`);
 
       purchaseProduct(product, from).then(async (result) => {
         const msg = `Order complete!\n\n${result}\n\nThank you!`;
@@ -107,18 +110,13 @@ export async function POST(req: NextRequest) {
         setTimeout(() => resetSession(from), 10_000);
       });
 
-      return new NextResponse(twiml.toString(), {
-        headers: { "Content-Type": "text/xml" },
-      });
+      return twimlResponse(`Processing your order for ${product.title}...`);
     }
 
     // Batch purchase — reply immediately, process async
     if (newState.stage === "batch-purchasing" && newState.selectedProducts?.length) {
       const products = newState.selectedProducts;
       updateSession(from, newState, body, `Processing ${products.length} items...`);
-
-      const twiml = new twilio.twiml.MessagingResponse();
-      twiml.message(`Processing ${products.length} items... I'll message you when done!`);
 
       (async () => {
         const results: string[] = [];
@@ -142,9 +140,7 @@ export async function POST(req: NextRequest) {
         setTimeout(() => resetSession(from), 10_000);
       })();
 
-      return new NextResponse(twiml.toString(), {
-        headers: { "Content-Type": "text/xml" },
-      });
+      return twimlResponse(`Processing ${products.length} items... I'll message you when done!`);
     }
 
     updateSession(from, newState, body, replyText);
@@ -158,11 +154,5 @@ export async function POST(req: NextRequest) {
     updateSession(from, newState, body, replyText);
   }
 
-  const twiml = new twilio.twiml.MessagingResponse();
-  const message = twiml.message(replyText);
-  mediaUrls.forEach((url) => message.media(url));
-
-  return new NextResponse(twiml.toString(), {
-    headers: { "Content-Type": "text/xml" },
-  });
+  return twimlResponse(replyText, mediaUrls);
 }
