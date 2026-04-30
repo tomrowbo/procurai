@@ -1,8 +1,10 @@
-# ProcurAI - Hackathon Submission
+# Sourcy - Hackathon Submission
 
 Track: `Money Movement`
 
-ProcurAI is a WhatsApp-native procurement agent focused on one core job: move money safely for real-world purchases through automated payment execution and strict guardrails.
+Sourcy is a WhatsApp-native procurement agent focused on one core job: move money safely for real-world purchases through automated payment execution and strict guardrails.
+
+![Sourcy mascot](./Sourcy-Transparent.jpeg)
 
 Built for Cursor x Briefcase London 2026: [Hackathon Page](https://cusor-hack-london-2026-1.vercel.app/).
 
@@ -29,7 +31,7 @@ This project is intentionally scoped to the `Money Movement` stream:
 
 ## Why this is Money Movement
 
-The hackathon track asks for agents that directly move money with clear risk boundaries. ProcurAI demonstrates that directly:
+The hackathon track asks for agents that directly move money with clear risk boundaries. Sourcy demonstrates that directly:
 
 - `Payment execution`: order payment is executed through wallet transaction approval.
 - `Risk rails`: purchases above threshold are blocked before funds move.
