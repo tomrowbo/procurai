@@ -46,6 +46,17 @@ function isImageRequest(message: string): boolean {
   return /(image|images|photo|photos|picture|pictures|pic|pics)/i.test(message);
 }
 
+function getImageProducts(state: {
+  products?: Product[];
+  selectedProducts?: Product[];
+  selectedProduct?: Product;
+}): Product[] {
+  if (state.products?.length) return state.products.slice(0, 3);
+  if (state.selectedProducts?.length) return state.selectedProducts.slice(0, 3);
+  if (state.selectedProduct) return [state.selectedProduct];
+  return [];
+}
+
 function twimlResponse(text: string, mediaUrls: string[] = []): NextResponse {
   const escapedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const mediaXml = mediaUrls.map((url) => `<Media>${url}</Media>`).join("");
@@ -69,9 +80,12 @@ export async function POST(req: NextRequest) {
   let newState = session.state;
   let mediaUrls: string[] = [];
 
-  // Handle image requests deterministically
-  if (isImageRequest(body) && session.state.products?.length) {
-    const products = session.state.products.slice(0, 3);
+  // Handle image requests from current session deterministically, without relying on model state transitions.
+  if (isImageRequest(body)) {
+    const products = getImageProducts(session.state);
+    if (!products.length) {
+      return twimlResponse("I don't have product options in this chat yet. Tell me what you want to buy and I can show images.");
+    }
     mediaUrls = products
       .map((product) => product.imageUrl || PRODUCT_IMAGE_BY_ASIN[product.asin])
       .filter((url): url is string => Boolean(url));
@@ -94,6 +108,14 @@ export async function POST(req: NextRequest) {
     const agentResponse = await processMessage(body, session.state, session.history);
     replyText = agentResponse.reply;
     newState = agentResponse.newState;
+
+    // Preserve product context in case the model omits it on later turns.
+    if (!newState.products?.length && session.state.products?.length) {
+      newState = { ...newState, products: session.state.products };
+    }
+    if (!newState.selectedProducts?.length && session.state.selectedProducts?.length) {
+      newState = { ...newState, selectedProducts: session.state.selectedProducts };
+    }
 
     // Offer images when showing products
     if (
