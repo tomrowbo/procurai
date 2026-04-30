@@ -1,24 +1,69 @@
-# ProcurAI WhatsApp Procurement Agent
+# ProcurAI - Hackathon Submission
 
-ProcurAI is a Next.js app that lets users search and buy Amazon products through WhatsApp, with crypto-based checkout using Crossmint wallets.
+Track: `Money Movement`
 
-## What this app does
+ProcurAI is a WhatsApp-native procurement agent focused on one core job: move money safely for real-world purchases through automated payment execution and strict guardrails.
 
-- Receives WhatsApp messages via Twilio webhook.
-- Uses an AI agent to guide the user through product search and selection.
-- Enforces trust checks (single transaction + daily spending limits).
+Built for Cursor x Briefcase London 2026: [Hackathon Page](https://cusor-hack-london-2026-1.vercel.app/).
+
+## Money Movement scope
+
+This project is intentionally scoped to the `Money Movement` stream:
+
+- Executes real purchase payments (Crossmint order + wallet transaction approval).
+- Applies hard rails before money moves (single-transaction and daily limits).
+- Supports single and batch payment flows.
+- Returns explicit success/failure outcomes for each purchase attempt.
+
+## What the money agent does
+
+- Accepts inbound WhatsApp messages via Twilio webhook.
+- Uses an LLM orchestration layer to manage purchase confirmation flow.
+- Supports image-aware commerce UX:
+  - user can ask for product images
+  - bot responds with WhatsApp media attachments for suggested products
+- Runs deterministic trust controls before payment:
+  - max transaction amount (configurable)
+  - daily spending cap
 - Creates and pays Crossmint orders from a user-linked wallet.
 
-## Tech stack
+## Why this is Money Movement
 
-- Next.js App Router (`next@16`)
-- TypeScript
-- Twilio (WhatsApp webhook + TwiML response)
-- Anthropic SDK (conversation agent)
-- Crossmint APIs (wallet + order payment)
-- `viem` (server-side message signing for wallet approvals)
+The hackathon track asks for agents that directly move money with clear risk boundaries. ProcurAI demonstrates that directly:
 
-## Quick start
+- `Payment execution`: order payment is executed through wallet transaction approval.
+- `Risk rails`: purchases above threshold are blocked before funds move.
+- `Escalation behavior`: blocked transactions return clear reasons and stop automation.
+- `Operational clarity`: each payment attempt returns a deterministic status (`paid`, blocked, or failed).
+
+## Architecture at a glance
+
+- `POST /api/whatsapp`
+  - Main runtime entrypoint.
+  - Parses Twilio message payload, gets session state, invokes agent, runs trust checks, executes purchase flow, and returns TwiML.
+- `GET /api/test-payment?step=<step>`
+  - Integration harness for wallet, funding, trust checks, and order execution.
+
+Core modules:
+
+- `lib/agent.ts` - conversation intelligence and state transitions.
+- `lib/trust.ts` - policy rails for transaction and daily limits.
+- `lib/wallet.ts` - wallet provisioning and transaction approval signing.
+- `lib/checkout.ts` - order creation and payment execution.
+- `lib/conversation.ts` - per-user session/history memory.
+
+See `PROJECT_STRUCTURE.md` for the detailed repository map.
+
+## Demo script (2-3 minutes)
+
+1. User sends a buying request in WhatsApp.
+2. Agent returns product options.
+3. User asks for images -> bot returns product media attachments.
+4. User confirms purchase.
+5. Agent executes payment and returns completion message.
+6. Trigger a blocked scenario (over threshold) to show guardrails stopping money movement.
+
+## Setup and run
 
 1. Install dependencies:
 
@@ -26,17 +71,16 @@ ProcurAI is a Next.js app that lets users search and buy Amazon products through
 pnpm install
 ```
 
-2. Create/update `.env.local` with required variables:
+2. Configure `.env.local`:
 
 - `ANTHROPIC_API_KEY`
 - `CROSSMINT_API_KEY`
-- `CROSSMINT_ENVIRONMENT` (`staging` or production value)
-- `WALLET_SIGNER_KEY` (server signer private key)
+- `CROSSMINT_ENVIRONMENT`
+- `WALLET_SIGNER_KEY`
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_AUTH_TOKEN`
-- `SPECTER_API_KEY` (optional)
 - `MAX_TRANSACTION_AMOUNT` (optional, defaults to `50`)
-- `FUNDED_WALLET_ADDRESS` (optional for testing)
+- `FUNDED_WALLET_ADDRESS` (optional)
 - Shipping defaults (optional):
   - `RECIPIENT_EMAIL`
   - `RECIPIENT_NAME`
@@ -46,13 +90,13 @@ pnpm install
   - `RECIPIENT_ADDRESS_ZIP`
   - `RECIPIENT_ADDRESS_COUNTRY`
 
-3. Run the app:
+3. Start dev server:
 
 ```bash
 pnpm dev
 ```
 
-4. Configure your Twilio WhatsApp webhook to:
+4. Configure Twilio WhatsApp webhook:
 
 `POST /api/whatsapp`
 
@@ -62,16 +106,3 @@ pnpm dev
 - `pnpm build` - build production bundle
 - `pnpm start` - run production server
 - `pnpm lint` - run ESLint
-
-## Key API routes
-
-- `POST /api/whatsapp`
-  - Main webhook entry point.
-  - Parses Twilio form data, processes conversation state, runs trust checks, creates orders, and replies with TwiML.
-- `GET /api/test-payment?step=<step>`
-  - Payment/wallet test harness.
-  - Supported steps: `wallet`, `fund`, `balance`, `trust`, `order`, `full`.
-
-## Architecture docs
-
-See `PROJECT_STRUCTURE.md` for the folder-level map and runtime flow.
